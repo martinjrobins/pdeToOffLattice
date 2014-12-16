@@ -41,10 +41,10 @@ xminboundary = tyche.new_reflective_boundary(tyche.new_xplane(0,1),[L,0,0])
 xmaxboundary = tyche.new_reflective_boundary(tyche.new_xplane(L,-1),[-L,0,0])
 
 #set off-lattice sink and source
-sink = tyche.new_uni_reaction(conversion_rate,[[A],[A.lattice]],tyche.new_xplane(interface,-1))
-source = tyche.new_uni_reaction(conversion_rate,[[A.lattice],[A]],tyche.new_xplane(interface,1))
+sink = tyche.new_uni_reaction(conversion_rate,[[A],[A.lattice()]],tyche.new_xplane(interface,-1))
+source = tyche.new_lattice_reaction(conversion_rate,[[A.lattice()],[A]],tyche.new_xplane(interface,1))
 
-algorithm = tyche.group([tyche.new_diffusion(), xminboundary, xmaxboundary, sink, source])
+algorithm = tyche.group([tyche.new_diffusion(), sink, source, xminboundary, xmaxboundary])
 algorithm.add_species(A)
 
 
