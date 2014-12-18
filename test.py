@@ -38,7 +38,8 @@ mol_dt = timeStepDuration/100.
 
 A = tyche.new_species([D,0,0])
 A.fill_uniform([0,0,0],[L,0,0],1000)
-grid = tyche.new_structured_grid([0,0,0],[L,0,0],[dx,0,0])
+grid = tyche.new_structured_grid([0,0,0],[L,1,1],[dx,1,1])
+print grid
 A.set_grid(grid)
 
 xlow = tyche.new_xplane(0,1)
@@ -51,11 +52,12 @@ sink = tyche.new_uni_reaction(conversion_rate,[[A],[A.pde()]])
 pde_region = tyche.new_xplane(interface,1)
 sink.set_geometry(0,pde_region)
 source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde()],[A]])
-offlattice_region = tyche.new_xplane(interface,-1)
+offlattice_region = tyche.new_xplane(interface,1)
 source.set_geometry(offlattice_region)
 
 diffusion = tyche.new_diffusion()
-algorithm = tyche.group([diffusion, sink, xminboundary, xmaxboundary])
+algorithm = tyche.group([diffusion,sink,source,xminboundary, xmaxboundary])
+
 algorithm.add_species(A)
 
 mesh = Grid1D(nx=nx, dx=dx)
@@ -63,16 +65,17 @@ phi = CellVariable(name="solution variable",  mesh=mesh, value=1000.)
 
 # setup plotting
 plt.figure()
-x = np.arange(0,1,dx)
+x = np.arange(0,L,dx)
 plot_pde, = plt.plot(x,phi.value,linewidth=2,label='PDE')
 off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
 plot_off_lattice = plt.bar(x,off_lattice_concentration[:,0,0],width=dx)
 plt.legend()
+plt.ylim(0,1200)
 for step in range(steps):
-    plt.savefig("test_plot%04d.pdf"%step)
-    
     print "doing step ",step
-
+    print A
+    plt.savefig("test_plot%04d.png"%step)
+    
     #set off-lattice generators 
     #(set B compartments equal to pde)
     A.set_pde(np.reshape(phi.value,[nx,1,1]))
@@ -81,7 +84,7 @@ for step in range(steps):
     time = algorithm.integrate_for_time(timeStepDuration,mol_dt)
     
     plot_pde.set_ydata(phi.value)
-    off_lattice_concentration = A.get_concentration([0,0,0],[L,0,0],[nx,1,1])
+    off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
     for rect, height in zip(plot_off_lattice, off_lattice_concentration[:,0,0]):
         rect.set_height(height)
     
