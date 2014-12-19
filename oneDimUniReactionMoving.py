@@ -43,15 +43,18 @@ baseEq = TransientTerm() == DiffusionTerm(coeff=D) - ImplicitSourceTerm(coeff=k)
 #####################
 
 A = tyche.new_species([D,0,0])
+dummy = tyche.new_species([0,0,0])
+
 grid = tyche.new_structured_grid([0,0,0],[L,1,1],[dx,1,1])
 A.set_grid(grid)
+dummy.set_grid(grid)
 
 xlow = tyche.new_xplane(0,1)
 xhigh = tyche.new_xplane(L,-1)
 xminboundary = tyche.new_reflective_boundary(xlow)
 xmaxboundary = tyche.new_reflective_boundary(xhigh)
 
-sink = tyche.new_uni_reaction(conversion_rate,[[A,A.lattice()],[A.pde()]])
+sink = tyche.new_uni_reaction(conversion_rate,[[A,dummy.pde()],[A.pde()]])
 
 source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde()],[A]])
 
@@ -104,7 +107,7 @@ for step in range(steps):
     #set off-lattice generators 
     phiOld = phi.value*(!mask)
     A.set_pde(np.reshape(phiOld,[nx,1,1]))
-    A.set_lattice(np.reshape(mask,[nx,1,1]))
+    dummy.set_pde(np.reshape(mask*1.0,[nx,1,1]))
     
     #integrate pde model
     eq = baseEq - conversion_rate*ImplicitSourceTerm(mask)
