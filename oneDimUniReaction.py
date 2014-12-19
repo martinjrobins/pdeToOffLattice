@@ -6,7 +6,7 @@ Created on Mon Dec 15 14:05:32 2014
 """
 
 from fipy import *
-from scipy.special import erf
+from scipy.special import erf, erfc
 from math import sqrt
 import pyTyche as tyche
 import numpy as np
@@ -19,34 +19,30 @@ dx = L/nx
 conversion_rate = 500.
 
 interface = L/2.0
-N = 10000.
-valueLeft = N
-valueRight = 0
+lam = 10.0**6
+k = 10.
+beta = sqrt(k/D)
+N = lam/(2*beta*D)
 
-timeStepDuration = 0.9 * dx**2 / (2 * D)
+mol_dt = 10.0**(-4)
+timeStepDuration = mol_dt*10.
 steps = 200
-mol_dt = timeStepDuration/100.
+
 
 #############
 # PDE stuff #
 #############
 
 mesh = Grid1D(nx=nx, dx=dx)
-
 phi = CellVariable(name="solution variable",  mesh=mesh, value=0.)
-phi.setValue(N, where = (mesh.x<interface))
-
-#phi.constrain(valueRight, mesh.facesRight)
-#phi.constrain(valueLeft, mesh.facesLeft)
-
-eq = TransientTerm() == DiffusionTerm(coeff=D) - conversion_rate*ImplicitSourceTerm((mesh.x > interface))
+phi.faceGrad.constrain(lam * mesh.faceNormals, where=mesh.facesLeft)
+eq = TransientTerm() == DiffusionTerm(coeff=D) - conversion_rate*ImplicitSourceTerm((mesh.x > interface)) - ImplicitSourceTerm(coeff=k)
 
 #####################
 # Off-lattice stuff #
 #####################
 
 A = tyche.new_species([D,0,0])
-A.fill_uniform([L/2,0,0],[L,0,0],int(N/2.))
 grid = tyche.new_structured_grid([0,0,0],[L,1,1],[dx,1,1])
 A.set_grid(grid)
 
@@ -63,8 +59,10 @@ source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde()],[A]])
 offlattice_region = tyche.new_xplane(interface,-1)
 source.set_geometry(offlattice_region)
 
+uni = tyche.new_uni_reaction(k,[[A],[]])
+
 diffusion = tyche.new_diffusion()
-algorithm = tyche.group([diffusion,sink,source,xminboundary,xmaxboundary])
+algorithm = tyche.group([diffusion,uni,sink,source,xminboundary])
 algorithm.add_species(A)
 
 
@@ -72,26 +70,35 @@ algorithm.add_species(A)
 # Plotting #
 ############
 
+def concentration_gradient(x,t):
+    exact = (lam/(D*beta)) * (
+               np.exp(-beta*(x))
+                - 0.5*np.exp(-beta*(x))*erfc((2.0*beta*D*t-(x))/np.sqrt(4.0*D*t))
+                - 0.5*np.exp(beta*(x))*erfc((2.0*beta*D*t+(x))/np.sqrt(4.0*D*t))
+        )
+    return exact
+
 plt.figure()
 x = np.arange(dx/2.,L,dx)
 t = 0
-#analytical = N*(1 - erf(x / (2 * sqrt(D * t))))
-analytical = N*(x==x)
+analytical = concentration_gradient(x,t)
 plot_pde, = plt.plot(x,phi.value,linewidth=2,label='PDE')
-plot_analytical, = plt.plot(x,analytical,linewidth=2,label='Analytical')
 off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
 plot_total, = plt.plot(x,phi.value+off_lattice_concentration[:,0,0],linewidth=2,label='Total')
 plot_off_lattice = plt.bar(x-dx/2,off_lattice_concentration[:,0,0],width=dx)
+plot_analytical, = plt.plot(x,analytical,linewidth=2,linestyle='--',label='Analytical')
 plt.legend()
 plt.ylim(0,N*1.5)
-
+calculate_probabilities
 
 #############
 # Time Loop #
 #############
 for step in range(steps):
     print "doing step ",step
-    plt.savefig("oneDimDiffusion/oneDimDiffusion%04d.png"%step)    
+    
+    #plot
+    plt.savefig("oneDimUniReaction/oneDimUniReaction%04d.png"%step)    
     
     #set off-lattice generators 
     phiOld = phi.value + 0
@@ -106,7 +113,9 @@ for step in range(steps):
     #transfer sink particles to pde  
     phiNew = phi.value + A.get_pde()[:,0,0] - phiOld
     phi.setValue(phiNew)
-    analytical = N*(x==x)
+    
+    #update plotting
+    analytical = concentration_gradient(x,t)
     plot_analytical.set_ydata(analytical)
     plot_pde.set_ydata(phiNew)
     off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
