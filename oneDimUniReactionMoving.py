@@ -10,6 +10,7 @@ from scipy.special import erf, erfc
 from math import sqrt
 import pyTyche as tyche
 import numpy as np
+#from fipy import numerix as np
 import matplotlib.pyplot as plt
 
 nx = 50
@@ -36,6 +37,7 @@ steps = 200
 
 mesh = Grid1D(nx=nx, dx=dx)
 phi = CellVariable(name="solution variable",  mesh=mesh, value=0.)
+total = CellVariable(name="total variable",  mesh=mesh, value=0.)
 baseEq = TransientTerm() == DiffusionTerm(coeff=D) - ImplicitSourceTerm(coeff=k)
 
 #####################
@@ -58,13 +60,12 @@ sink = tyche.new_uni_reaction(conversion_rate,[[A,dummy.pde()],[A.pde()]])
 
 source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde()],[A]])
 
-
 uni = tyche.new_uni_reaction(k,[[A],[]])
 
 flux = tyche.new_zero_reaction(lam/dx,[0,0,0],[dx,1,1])
 
 diffusion = tyche.new_diffusion()
-algorithm = tyche.group([diffusion,flux,uni,sink,source,xminboundary])
+algorithm = tyche.group([diffusion,xminboundary,flux,uni,sink,source])
 algorithm.add_species(A)
 
 
@@ -86,7 +87,8 @@ t = 0
 analytical = concentration_gradient(x,t)
 plot_pde, = plt.plot(x,phi.value,linewidth=2,label='PDE')
 off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
-plot_total, = plt.plot(x,phi.value+off_lattice_concentration[:,0,0],linewidth=2,label='Total')
+total.setValue(phi.value+off_lattice_concentration[:,0,0])
+plot_total, = plt.plot(x,total.value,linewidth=2,label='Total')
 plot_off_lattice = plt.bar(x-dx/2,off_lattice_concentration[:,0,0],width=dx)
 plot_analytical, = plt.plot(x,analytical,linewidth=2,linestyle='--',label='Analytical')
 plt.legend()
@@ -102,22 +104,28 @@ for step in range(steps):
     #plot
     plt.savefig("oneDimUniReactionMoving/oneDimUniReactionMoving%04d.png"%step)  
     
-    mask = phi > threshold
+    mask = (total > threshold)
     
     #set off-lattice generators 
-    phiOld = phi.value*(!mask)
-    A.set_pde(np.reshape(phiOld,[nx,1,1]))
-    dummy.set_pde(np.reshape(mask*1.0,[nx,1,1]))
+    phiOld = (phi.value*(mask==False)).value + 0.0
+    A.set_pde(numerix.reshape(phiOld,[nx,1,1]))
+    tmp = (mask*1.0).value
+    dummy.set_pde(numerix.reshape(tmp,[nx,1,1]))
     
     #integrate pde model
-    eq = baseEq - conversion_rate*ImplicitSourceTerm(mask)
+    print 'integrate pde'
+    eq = baseEq - conversion_rate*ImplicitSourceTerm(mask*1.0)
     eq.solve(var=phi, dt=timeStepDuration)    
     
-    #integrate off-lattice model    
+    #integrate off-lattice model
+    print 'integrate off-lattice'   
     t = algorithm.integrate_for_time(timeStepDuration,mol_dt)
     
-    #transfer sink particles to pde  
+    #transfer sink particles to pde 
+    print 'transfer'    
+    print A.get_pde()[:,0,0] - phiOld
     phiNew = phi.value + A.get_pde()[:,0,0] - phiOld
+    #phiNew = phi.value
     phi.setValue(phiNew)
     
     #update plotting
@@ -125,7 +133,8 @@ for step in range(steps):
     plot_analytical.set_ydata(analytical)
     plot_pde.set_ydata(phiNew)
     off_lattice_concentration = A.get_concentration([0,0,0],[L,1,1],[nx,1,1])
-    plot_total.set_ydata(phiNew+off_lattice_concentration[:,0,0])
+    total.setValue(phiNew+off_lattice_concentration[:,0,0])
+    plot_total.set_ydata(total.value)
     for rect, height in zip(plot_off_lattice, off_lattice_concentration[:,0,0]):
         rect.set_height(height)
     
