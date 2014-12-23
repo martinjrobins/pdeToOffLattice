@@ -10,7 +10,6 @@ from scipy.special import erf, erfc
 from math import sqrt
 import pyTyche as tyche
 import numpy as np
-#from fipy import numerix as np
 import matplotlib.pyplot as plt
 
 nx = 50
@@ -19,7 +18,6 @@ L = 1.
 dx = L/nx
 conversion_rate = 500.
 
-interface = L/2.0
 lam = 10.0**6
 k = 10.
 beta = sqrt(k/D)
@@ -27,9 +25,8 @@ N = lam/(2*beta*D)
 threshold = 5*10**4
 
 mol_dt = 10.0**(-4)
-timeStepDuration = mol_dt*10.
+timeStepDuration = mol_dt*5.
 steps = 200
-
 
 #############
 # PDE stuff #
@@ -38,6 +35,8 @@ steps = 200
 mesh = Grid1D(nx=nx, dx=dx)
 phi = CellVariable(name="solution variable",  mesh=mesh, value=0.)
 total = CellVariable(name="total variable",  mesh=mesh, value=0.)
+mask = CellVariable(name="mask",  mesh=mesh, value=0.)
+
 baseEq = TransientTerm() == DiffusionTerm(coeff=D) - ImplicitSourceTerm(coeff=k)
 
 #####################
@@ -46,10 +45,12 @@ baseEq = TransientTerm() == DiffusionTerm(coeff=D) - ImplicitSourceTerm(coeff=k)
 
 A = tyche.new_species([D,0,0])
 dummy = tyche.new_species([0,0,0])
+not_dummy = tyche.new_species([0,0,0])
 
 grid = tyche.new_structured_grid([0,0,0],[L,1,1],[dx,1,1])
 A.set_grid(grid)
 dummy.set_grid(grid)
+not_dummy.set_grid(grid)
 
 xlow = tyche.new_xplane(0,1)
 xhigh = tyche.new_xplane(L,-1)
@@ -57,11 +58,8 @@ xminboundary = tyche.new_reflective_boundary(xlow)
 xmaxboundary = tyche.new_reflective_boundary(xhigh)
 
 sink = tyche.new_uni_reaction(conversion_rate,[[A,dummy.pde()],[A.pde()]])
-
-source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde()],[A]])
-
+source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde(),not_dummy.pde()],[A]])
 uni = tyche.new_uni_reaction(k,[[A],[]])
-
 flux = tyche.new_zero_reaction(lam/dx,[0,0,0],[dx,1,1])
 
 diffusion = tyche.new_diffusion()
@@ -105,27 +103,23 @@ for step in range(steps):
     plt.savefig("oneDimUniReactionMoving/oneDimUniReactionMoving%04d.png"%step)  
     
     mask = (total > threshold)
+    not_mask = mask==False
     
     #set off-lattice generators 
-    phiOld = (phi.value*(mask==False)).value + 0.0
+    phiOld = (phi.value*not_mask).value + 0.0
     A.set_pde(numerix.reshape(phiOld,[nx,1,1]))
-    tmp = (mask*1.0).value
-    dummy.set_pde(numerix.reshape(tmp,[nx,1,1]))
-    
+    dummy.set_pde(numerix.reshape((mask*1.0).value,[nx,1,1]))
+    not_dummy.set_pde(numerix.reshape((not_mask*1.0).value,[nx,1,1]))
+
     #integrate pde model
-    print 'integrate pde'
-    eq = baseEq - conversion_rate*ImplicitSourceTerm(mask*1.0)
+    eq = baseEq + conversion_rate*ImplicitSourceTerm(coeff=mask==False)
     eq.solve(var=phi, dt=timeStepDuration)    
     
     #integrate off-lattice model
-    print 'integrate off-lattice'   
     t = algorithm.integrate_for_time(timeStepDuration,mol_dt)
     
     #transfer sink particles to pde 
-    print 'transfer'    
-    print A.get_pde()[:,0,0] - phiOld
     phiNew = phi.value + A.get_pde()[:,0,0] - phiOld
-    #phiNew = phi.value
     phi.setValue(phiNew)
     
     #update plotting

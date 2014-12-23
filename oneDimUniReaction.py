@@ -61,8 +61,10 @@ source.set_geometry(offlattice_region)
 
 uni = tyche.new_uni_reaction(k,[[A],[]])
 
+flux = tyche.new_zero_reaction(lam/dx,[0,0,0],[dx,1,1])
+
 diffusion = tyche.new_diffusion()
-algorithm = tyche.group([diffusion,uni,sink,source,xminboundary])
+algorithm = tyche.group([diffusion,xminboundary,uni,sink,source])
 algorithm.add_species(A)
 
 
@@ -89,7 +91,7 @@ plot_off_lattice = plt.bar(x-dx/2,off_lattice_concentration[:,0,0],width=dx)
 plot_analytical, = plt.plot(x,analytical,linewidth=2,linestyle='--',label='Analytical')
 plt.legend()
 plt.ylim(0,N*1.5)
-calculate_probabilities
+
 
 #############
 # Time Loop #
