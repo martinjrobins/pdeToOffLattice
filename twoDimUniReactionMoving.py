@@ -55,7 +55,7 @@ not_dummy.set_grid(grid)
 sink = tyche.new_uni_reaction(conversion_rate,[[A,dummy.pde()],[A.pde()]])
 source = tyche.new_zero_reaction_lattice(conversion_rate,[[A.pde(),not_dummy.pde()],[A]])
 uni = tyche.new_uni_reaction(k,[[A],[]])
-flux = tyche.new_zero_reaction(2*pi*lam/(dx*dx),[L/2-dx/2,L/2-dx/2,0],[L/2+dx/2,L/2+dx/2,1])
+flux = tyche.new_zero_reaction(lam/(dx*dx),[L/2-dx/2,L/2-dx/2,0],[L/2+dx/2,L/2+dx/2,1])
 
 diffusion = tyche.new_diffusion()
 algorithm = tyche.group([diffusion,flux,uni,sink,source])
